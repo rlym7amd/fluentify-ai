@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -18,15 +17,18 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useChat } from "@ai-sdk/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export default function Chat() {
   const [language, setLanguage] = useState("english");
   const [topic, setTopic] = useState("restaurant");
   const [level, setLevel] = useState("beginner");
   const [started, setStarted] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const { messages, input, handleInputChange, handleSubmit } = useChat({
+  const { messages } = useChat({
     initialMessages: started
       ? [
           {
@@ -42,7 +44,40 @@ export default function Chat() {
       topic,
     },
   });
-  console.log({ input });
+
+  async function startRecording() {
+    try {
+      // Request user for mic permission
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
+      // Record audio blob and store blob chunks
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        console.log(chunksRef.current);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error starting recording:", err);
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }
 
   return (
     <div className="h-screen">
@@ -130,14 +165,13 @@ export default function Chat() {
               </div>
             ))}
           </div>
-          <div className="mt-auto">
-            <form onSubmit={handleSubmit}>
-              <Input
-                value={input}
-                onChange={handleInputChange}
-                placeholder="Type your message..."
-              />
-            </form>
+          <div className="mt-auto flex justify-center">
+            <Button
+              variant="outline"
+              onClick={isRecording ? stopRecording : startRecording}
+            >
+              {isRecording ? "Stop Recording" : "Start Recording"}
+            </Button>
           </div>
         </div>
       )}
